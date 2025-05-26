@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle vs. Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Dark mode is now default */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a; /* Dark background */
+            color: #e0e0e0; /* Light text */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align items to the top */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: row;
+            gap: 40px; /* Space between player and bot sections */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            justify-content: center;
+            align-items: flex-start;
+            max-width: 1200px; /* Max width for the game container */
+            width: 100%;
+        }
+
+        .game-section {
+            background-color: #2c2c2c; /* Darker section background */
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            flex: 1; /* Allow sections to grow and shrink */
+            min-width: 300px; /* Minimum width for each section */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            position: relative; /* Needed for absolute positioning of How to Play button */
+        }
+
+        .game-section h2 {
+            color: #e0e0e0; /* Light text for headers */
+        }
+
+        .wordle-grid {
+            display: grid;
+            grid-template-rows: repeat(6, 1fr); /* 6 rows for guesses */
+            grid-template-columns: repeat(5, 1fr); /* 5 columns for letters */
+            gap: 8px; /* Space between cells */
+            width: 300px; /* Fixed width for the grid */
+            height: 360px; /* Fixed height for the grid */
+            margin-bottom: 20px;
+        }
+
+        .grid-cell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            font-weight: bold;
+            border: 2px solid #555; /* Lighter border for cells */
+            border-radius: 8px;
+            text-transform: uppercase;
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+            color: #e0e0e0; /* Light text for cells */
+        }
+
+        .grid-cell.correct {
+            background-color: #4a823a; /* Darker green */
+            border-color: #4a823a;
+            color: white;
+        }
+
+        .grid-cell.present {
+            background-color: #c29a2b; /* Darker yellow */
+            border-color: #c29a2b;
+            color: white;
+        }
+
+        .grid-cell.absent {
+            background-color: #505050; /* Darker gray */
+            border-color: #505050;
+            color: white;
+        }
+
+        .keyboard {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            max-width: 500px; /* Max width for keyboard */
+            margin-top: 20px;
+        }
+
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .key {
+            background-color: #505050; /* Darker key background */
+            padding: 12px 0;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-transform: uppercase;
+            user-select: none; /* Prevent text selection */
+            transition: background-color 0.2s ease, color 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            color: #e0e0e0; /* Light key text */
+        }
+
+        .key:hover {
+            background-color: #6a6a6a; /* Lighter gray on hover */
+        }
+
+        .key.large {
+            flex: 1.5; /* Larger width for Enter and Backspace */
+        }
+
+        .key.correct {
+            background-color: #4a823a; /* Darker green */
+            color: white;
+        }
+
+        .key.present {
+            background-color: #c29a2b; /* Darker yellow */
+            color: white;
+        }
+
+        .key.absent {
+            background-color: #3a3a3a; /* Even darker gray for absent */
+            color: white;
+        }
+
+        .message-box {
+            min-height: 40px;
+            margin-top: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            color: #ef4444; /* Red for error messages */
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: #2c2c2c; /* Dark modal background */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            color: #e0e0e0; /* Light text for modal */
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .modal-content h2 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #e0e0e0; /* Light text for modal headers */
+            transition: color 0.3s ease;
+        }
+
+        .modal-content p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+            color: #c0c0c0; /* Slightly darker light text for modal paragraphs */
+            transition: color 0.3s ease;
+        }
+
+        .modal-content button {
+            background-color: #4f46e5; /* Indigo */
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-content button:hover {
+            background-color: #4338ca; /* Darker indigo */
+            transform: translateY(-2px);
+        }
+
+        /* How to Play Button */
+        #how-to-play-button {
+            position: absolute;
+            top: 15px; /* Adjusted position relative to game-section */
+            left: 15px; /* Adjusted position relative to game-section */
+            background-color: #4f46e5;
+            color: white;
+            padding: 8px 12px; /* Slightly smaller padding */
+            border-radius: 8px;
+            font-size: 0.9rem; /* Slightly smaller font size */
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        #how-to-play-button:hover {
+            background-color: #4338ca;
+            transform: translateY(-2px);
+        }
+
+        /* How to Play Modal Specifics */
+        #how-to-play-modal .modal-content {
+            text-align: left;
+            max-width: 400px;
+            padding: 25px;
+        }
+
+        #how-to-play-modal .modal-content h2 {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.8rem;
+        }
+
+        #how-to-play-modal .modal-content p {
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        #how-to-play-modal .modal-content ul {
+            list-style: disc;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        #how-to-play-modal .modal-content li {
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        #how-to-play-modal .example-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            width: 100%;
+            max-width: 180px;
+            margin: 10px auto;
+        }
+
+        #how-to-play-modal .example-cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 4px;
+            color: white;
+            text-transform: uppercase;
+        }
+
+        #how-to-play-modal .example-cell.correct { background-color: #4a823a; } /* Dark mode green */
+        #how-to-play-modal .example-cell.present { background-color: #c29a2b; } /* Dark mode yellow */
+        #how-to-play-modal .example-cell.absent { background-color: #505050; } /* Dark mode gray */
+
+        #how-to-play-modal .close-button {
+            background-color: #ef4444; /* Red close button */
+            margin-top: 15px;
+            padding: 10px 20px;
+        }
+        #how-to-play-modal .close-button:hover {
+            background-color: #dc2626;
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .game-section {
+                width: 100%;
+                margin-bottom: 20px;
+            }
+
+            .wordle-grid {
+                width: 280px;
+                height: 336px;
+            }
+
+            .grid-cell {
+                font-size: 1.5rem;
+            }
+
+            .key {
+                padding: 10px 0;
+                font-size: 1rem;
+            }
+
+            #how-to-play-button {
+                top: 10px;
+                left: 10px;
+                padding: 6px 10px; /* Even smaller for mobile */
+                font-size: 0.8rem; /* Even smaller for mobile */
+            }
+
+            #how-to-play-modal .modal-content {
+                padding: 20px;
+            }
+
+            #how-to-play-modal .modal-content h2 {
+                font-size: 1.6rem;
+            }
+
+            #how-to-play-modal .modal-content p,
+            #how-to-play-modal .modal-content li {
+                font-size: 0.9rem;
+            }
+
+            #how-to-play-modal .example-cell {
+                width: 28px;
+                height: 28px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center items-start min-h-screen p-5">
+    <div class="game-container">
+        <div class="game-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">Your Wordle</h2>
+            <button id="how-to-play-button" class="rounded-lg">How to Play</button>
+            <div id="player-grid" class="wordle-grid"></div>
+            <div id="player-message" class="message-box"></div>
+            <div id="player-keyboard" class="keyboard"></div>
+        </div>
+
+        <div class="game-section">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">Bot's Wordle</h2>
+            <div id="bot-grid" class="wordle-grid"></div>
+            <div id="bot-message" class="message-box"></div>
+        </div>
+    </div>
+
+    <div id="game-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 id="modal-title"></h2>
+            <p id="modal-message"></p>
+            <button id="play-again-button">Play Again</button>
+        </div>
+    </div>
+
+    <div id="how-to-play-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2>How to Play Wordle</h2>
+            <p>Guess the <strong>WORDLE</strong> in 6 tries.</p>
+            <p>Each guess must be a valid 5-letter word. Hit the enter button to submit.</p>
+            <p>After each guess, the color of the tiles will change to show how close your guess was to the word.</p>
+
+            <div class="mb-4">
+                <p class="font-bold mb-2">Examples:</p>
+                <div class="example-grid">
+                    <div class="example-cell correct">W</div>
+                    <div class="example-cell">E</div>
+                    <div class="example-cell">A</div>
+                    <div class="example-cell">R</div>
+                    <div class="example-cell">Y</div>
+                </div>
+                <p>The letter <strong>W</strong> is in the word and in the correct spot.</p>
+
+                <div class="example-grid">
+                    <div class="example-cell">P</div>
+                    <div class="example-cell">I</div>
+                    <div class="example-cell present">L</div>
+                    <div class="example-cell">L</div>
+                    <div class="example-cell">S</div>
+                </div>
+                <p>The letter <strong>L</strong> is in the word but in the wrong spot.</p>
+
+                <div class="example-grid">
+                    <div class="example-cell">V</div>
+                    <div class="example-cell">A</div>
+                    <div class="example-cell">G</div>
+                    <div class="example-cell absent">U</div>
+                    <div class="example-cell">E</div>
+                </div>
+                <p>The letter <strong>U</strong> is not in the word in any spot.</p>
+            </div>
+            <p class="mb-4">You play against a bot. The game ends when either you or the bot guesses their word, or when both run out of guesses.</p>
+            <button id="close-how-to-play-button" class="close-button">Got It!</button>
+        </div>
+    </div>
+
+    <script>
+        // List of 5-letter words for the game
+        const WORD_LIST = [
+            "apple", "baker", "brave", "crane", "dream", "earth", "flame", "grape", "house", "igloo",
+            "jolly", "knife", "lemon", "magic", "night", "ocean", "plant", "queen", "river", "space",
+            "table", "union", "vowel", "whale", "xerox", "youth", "zebra", "abode", "abuse", "actor",
+            "acute", "admit", "adopt", "adult", "after", "again", "agent", "agree", "ahead", "album",
+            "alert", "alike", "alive", "allow", "alone", "along", "alter", "among", "anger", "angle",
+            "angry", "apart", "apple", "apply", "arena", "argue", "arise", "array", "aside", "asset",
+            "audio", "audit", "avoid", "award", "aware", "badly", "baker", "basis", "beach", "begin",
+            "behalf", "below", "bench", "birth", "black", "blame", "blind", "block", "blood", "board",
+            "boost", "bound", "brain", "brand", "bread", "break", "breed", "brief", "bring", "broad",
+            "brown", "build", "burst", "buyer", "cabin", "cable", "calm", "canal", "candy", "carry",
+            "catch", "cause", "cease", "chain", "chair", "chaos", "charm", "chart", "chase", "cheap",
+            "check", "chest", "chief", "child", "civil", "claim", "class", "clean", "clear", "climb",
+            "clock", "close", "cloth", "cloud", "coach", "coast", "color", "count", "court", "cover",
+            "crack", "craft", "crash", "cream", "crime", "cross", "crowd", "cycle", "daily", "dance",
+            "death", "debut", "delay", "depth", "dirty", "doubt", "dozen", "draft", "drain", "drama",
+            "dream", "dress", "drink", "drive", "dwell", "early", "earth", "eight", "elect", "elite",
+            "empty", "enemy", "enjoy", "enter", "entry", "equal", "error", "essay", "event", "every",
+            "exact", "exist", "extra", "faith", "false", "fame", "fatal", "fault", "fiber", "field",
+            "fifth", "fifty", "fight", "final", "first", "fixed", "flash", "fleet", "floor", "fluid",
+            "focus", "force", "forth", "forty", "forum", "found", "frame", "frank", "fraud", "fresh",
+            "front", "fruit", "fully", "funny", "giant", "given", "glass", "glove", "grace", "grade",
+            "grain", "grand", "grant", "grass", "great", "green", "gross", "group", "guard", "guess",
+            "guest", "guide", "habit", "happy", "hardy", "harsh", "heavy", "hello", "hence", "house",
+            "human", "hurry", "ideal", "image", "imply", "index", "inner", "input", "issue", "joint",
+            "judge", "known", "label", "labor", "large", "later", "laugh", "layer", "learn", "lease",
+            "leave", "legal", "level", "light", "limit", "local", "logic", "loose", "lower", "loyal",
+            "lucky", "lunch", "major", "maker", "march", "marry", "match", "maybe", "mayor", "means",
+            "metal", "meter", "might", "minor", "minus", "model", "money", "month", "moral", "motor",
+            "mount", "mouse", "mouth", "movie", "music", "naked", "nasty", "naval", "needs", "nerve",
+            "never", "newly", "night", "noise", "north", "novel", "nurse", "occur", "ocean", "offer",
+            "often", "onion", "order", "other", "ought", "outer", "owner", "oxide", "panel", "paper",
+            "party", "patch", "pause", "peace", "phase", "phone", "photo", "piano", "piece", "pilot",
+            "pitch", "place", "plain", "plane", "plant", "plate", "point", "pound", "power", "press",
+            "price", "pride", "prime", "print", "prior", "prize", "proof", "proud", "prove", "quick",
+            "quiet", "quite", "radio", "raise", "range", "rapid", "ratio", "reach", "react", "ready",
+            "refer", "right", "rival", "river", "rough", "round", "route", "royal", "rural", "salad",
+            "sales", "sauce", "scale", "scene", "scope", "score", "sense", "serve", "seven", "shall",
+            "shape", "share", "sharp", "sheet", "shelf", "shell", "shift", "shirt", "shock", "shoot",
+            "short", "shown", "sight", "since", "sixth", "sixty", "sized", "skill", "sleep", "slice",
+            "slide", "small", "smart", "smell", "smile", "smoke", "solid", "solve", "sorry", "sound",
+            "south", "space", "spare", "speak", "speed", "spend", "split", "sport", "staff", "stage",
+            "stake", "stand", "start", "state", "steam", "steel", "stick", "still", "stock", "stone",
+            "store", "storm", "story", "strip", "study", "stuff", "style", "sugar", "suite", "super",
+            "sweet", "table", "taken", "taste", "taxes", "teach", "teams", "tears", "teeth", "tempo",
+            "tenth", "terms", "thank", "their", "theme", "there", "these", "thick", "thing", "think",
+            "third", "those", "three", "throw", "tight", "till", "times", "tired", "title", "today",
+            "token", "total", "touch", "tough", "towel", "tower", "trace", "track", "trade", "trail",
+            "train", "treat", "trend", "trial", "tribe", "trick", "troop", "truck", "truly", "trust",
+            "truth", "twice", "under", "undue", "union", "unity", "until", "upper", "upset", "urban",
+            "usage", "usual", "value", "video", "virus", "visit", "vital", "voice", "voter", "waste",
+            "watch", "water", "weary", "weigh", "weird", "wheel", "where", "while", "white", "whole",
+            "whose", "woman", "world", "worry", "worse", "worst", "worth", "would", "wound", "write",
+            "wrong", "yield", "young", "yours", "youth"
+        ];
+
+        const MAX_GUESSES = 6;
+        const WORD_LENGTH = 5;
+
+        // Game state variables for player and bot
+        let playerCurrentGuess = "";
+        let playerCurrentRow = 0;
+        let playerTargetWord = "";
+        let playerGameOver = false;
+        let playerWon = false; // Flag to track if player won
+
+        let botCurrentGuess = "";
+        let botCurrentRow = 0;
+        let botTargetWord = "";
+        let botGameOver = false;
+        let botWon = false; // Flag to track if bot won
+        let botPossibleWords = []; // Bot's list of possible words to guess from
+
+        // DOM elements
+        const body = document.body;
+        // Removed darkModeToggle as light mode is removed
+        const howToPlayButton = document.getElementById("how-to-play-button");
+        const howToPlayModal = document.getElementById("how-to-play-modal");
+        const closeHowToPlayButton = document.getElementById("close-how-to-play-button");
+
+        const playerGrid = document.getElementById("player-grid");
+        const playerMessage = document.getElementById("player-message");
+        const playerKeyboard = document.getElementById("player-keyboard");
+
+        const botGrid = document.getElementById("bot-grid");
+        const botMessage = document.getElementById("bot-message");
+
+        const gameModal = document.getElementById("game-modal");
+        const modalTitle = document.getElementById("modal-title");
+        const modalMessage = document.getElementById("modal-message");
+        const playAgainButton = document.getElementById("play-again-button");
+
+        // Initialize the game
+        function initializeGame() {
+            // Reset game state
+            playerCurrentGuess = "";
+            playerCurrentRow = 0;
+            playerGameOver = false;
+            playerWon = false;
+            playerTargetWord = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)].toUpperCase();
+
+            botCurrentGuess = "";
+            botCurrentRow = 0;
+            botGameOver = false;
+            botWon = false;
+            botTargetWord = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)].toUpperCase();
+            botPossibleWords = [...WORD_LIST].map(word => word.toUpperCase()); // Bot starts with all words
+
+            // Clear grids and messages
+            playerGrid.innerHTML = "";
+            botGrid.innerHTML = "";
+            playerMessage.textContent = "";
+            botMessage.textContent = "";
+
+            // Hide modals
+            gameModal.classList.add("hidden");
+            howToPlayModal.classList.add("hidden"); // Ensure how-to-play modal is hidden
+
+            // Setup grids
+            setupGrid(playerGrid);
+            setupGrid(botGrid);
+
+            // Setup keyboards (only for player)
+            setupKeyboard(playerKeyboard, "player");
+
+            // Add event listener for physical keyboard input
+            document.removeEventListener("keydown", handlePhysicalKeyboard);
+            document.addEventListener("keydown", handlePhysicalKeyboard);
+
+            console.log("Player target word:", playerTargetWord);
+            console.log("Bot target word:", botTargetWord);
+        }
+
+        // Setup the Wordle grid for a given player/bot
+        function setupGrid(gridElement) {
+            for (let i = 0; i < MAX_GUESSES; i++) {
+                for (let j = 0; j < WORD_LENGTH; j++) {
+                    const cell = document.createElement("div");
+                    cell.classList.add("grid-cell");
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
+        // Setup the virtual keyboard
+        function setupKeyboard(keyboardElement, type) {
+            keyboardElement.innerHTML = ""; // Clear existing keyboard
+
+            const keyboardLayout = [
+                ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACKSPACE"]
+            ];
+
+            keyboardLayout.forEach(row => {
+                const rowDiv = document.createElement("div");
+                rowDiv.classList.add("keyboard-row");
+                row.forEach(keyText => {
+                    const keyButton = document.createElement("button");
+                    keyButton.classList.add("key", "rounded-lg", "shadow-md");
+                    keyButton.textContent = keyText;
+                    keyButton.dataset.key = keyText;
+                    if (keyText === "ENTER" || keyText === "BACKSPACE") {
+                        keyButton.classList.add("large");
+                    }
+                    if (type === "player") { // Only attach event listener for player keyboard
+                        keyButton.addEventListener("click", () => handleKeyPress(keyText));
+                    }
+                    rowDiv.appendChild(keyButton);
+                });
+                keyboardElement.appendChild(rowDiv);
+            });
+        }
+
+        // Handle physical keyboard input
+        function handlePhysicalKeyboard(event) {
+            // Prevent keyboard input if any modal is open
+            if (!gameModal.classList.contains('hidden') || !howToPlayModal.classList.contains('hidden')) {
+                return;
+            }
+
+            if (playerGameOver) return;
+
+            const key = event.key.toUpperCase();
+            if (key === "BACKSPACE") {
+                playerCurrentGuess = playerCurrentGuess.slice(0, -1);
+            } else if (key === "ENTER") {
+                if (playerCurrentGuess.length === WORD_LENGTH) {
+                    checkPlayerGuess();
+                } else {
+                    displayMessage(playerMessage, "Not enough letters!", "error");
+                }
+            } else if (key.length === 1 && key.match(/[A-Z]/)) {
+                if (playerCurrentGuess.length < WORD_LENGTH) {
+                    playerCurrentGuess += key;
+                }
+            }
+            updateGridDisplay(playerGrid, playerCurrentGuess, playerCurrentRow);
+        }
+
+        // Update the grid display for a given player/bot
+        function updateGridDisplay(gridElement, currentGuess, currentRow) {
+            const rowCells = gridElement.querySelectorAll(`.grid-cell[data-row="${currentRow}"]`);
+            rowCells.forEach((cell, index) => {
+                cell.textContent = currentGuess[index] || "";
+            });
+        }
+
+        // Check the player's guess
+        function checkPlayerGuess() {
+            const guess = playerCurrentGuess;
+
+            if (!WORD_LIST.includes(guess.toLowerCase())) {
+                displayMessage(playerMessage, "Not in word list!", "error");
+                return;
+            }
+
+            displayMessage(playerMessage, "", "clear"); // Clear previous messages
+            const result = getGuessResult(guess, playerTargetWord);
+            applyGuessResult(playerGrid, playerKeyboard, guess, playerCurrentRow, result);
+
+            if (guess === playerTargetWord) {
+                playerGameOver = true;
+                playerWon = true;
+                showGameResult("You Win!", `Congratulations! You guessed the word: ${playerTargetWord}`);
+            } else if (playerCurrentRow === MAX_GUESSES - 1) {
+                playerGameOver = true;
+                // If player loses, check if bot has also finished to show combined result
+                if (botGameOver) {
+                    showFinalGameResult();
+                } else {
+                    // If bot is still playing, let it make a move
+                    setTimeout(makeBotGuess, 1000);
+                }
+            } else {
+                playerCurrentRow++;
+                playerCurrentGuess = "";
+                // If player hasn't won and hasn't run out of guesses, let the bot make a move
+                if (!botGameOver) {
+                    setTimeout(makeBotGuess, 1000); // Delay bot's guess for better UX
+                }
+            }
+        }
+
+        // Get the result of a guess (correct, present, absent)
+        function getGuessResult(guess, targetWord) {
+            const result = Array(WORD_LENGTH).fill("");
+            const targetWordLetters = targetWord.split('');
+            const guessLetters = guess.split('');
+
+            // First pass: Mark correct letters (green)
+            for (let i = 0; i < WORD_LENGTH; i++) {
+                if (guessLetters[i] === targetWordLetters[i]) {
+                    result[i] = "correct";
+                    targetWordLetters[i] = null; // Mark as used
+                }
+            }
+
+            // Second pass: Mark present letters (yellow) and absent letters (gray)
+            for (let i = 0; i < WORD_LENGTH; i++) {
+                if (result[i] === "") { // If not already marked as correct
+                    const indexInTarget = targetWordLetters.indexOf(guessLetters[i]);
+                    if (indexInTarget !== -1) {
+                        result[i] = "present";
+                        targetWordLetters[indexInTarget] = null; // Mark as used
+                    } else {
+                        result[i] = "absent";
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Apply guess result to grid cells and keyboard
+        function applyGuessResult(gridElement, keyboardElement, guess, row, result) {
+            const rowCells = gridElement.querySelectorAll(`.grid-cell[data-row="${row}"]`);
+            guess.split('').forEach((letter, index) => {
+                const cell = rowCells[index];
+                cell.textContent = letter;
+                cell.classList.add(result[index]);
+
+                // Update keyboard colors - only for player keyboard
+                if (keyboardElement === playerKeyboard) {
+                    const keyButton = keyboardElement.querySelector(`.key[data-key="${letter}"]`);
+                    if (keyButton) {
+                        // Prioritize correct > present > absent
+                        if (!keyButton.classList.contains("correct")) {
+                            if (result[index] === "correct") {
+                                keyButton.classList.remove("present", "absent");
+                                keyButton.classList.add("correct");
+                            } else if (result[index] === "present" && !keyButton.classList.contains("present")) {
+                                keyButton.classList.remove("absent");
+                                keyButton.classList.add("present");
+                            } else if (result[index] === "absent" && !keyButton.classList.contains("present") && !keyButton.classList.contains("correct")) {
+                                keyButton.classList.add("absent");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Display messages to the user
+        function displayMessage(messageElement, message, type) {
+            messageElement.textContent = message;
+            if (type === "error") {
+                messageElement.classList.add("text-red-500");
+            } else {
+                messageElement.classList.remove("text-red-500");
+            }
+        }
+
+        // Bot's guessing logic
+        function makeBotGuess() {
+            if (botGameOver) return;
+
+            // Filter possible words based on previous feedback
+            if (botCurrentRow > 0) {
+                const lastGuess = botCurrentGuess;
+                const lastResult = getGuessResult(lastGuess, botTargetWord);
+
+                botPossibleWords = botPossibleWords.filter(word => {
+                    const simulatedResult = getGuessResult(lastGuess, word);
+                    return JSON.stringify(simulatedResult) === JSON.stringify(lastResult);
+                });
+            }
+
+            // If no possible words left, or if the bot has already won, don't guess
+            if (botPossibleWords.length === 0 || botWon) {
+                botPossibleWords = [...WORD_LIST].map(word => word.toUpperCase()); // Fallback
+            }
+
+            // Pick a random word from the filtered list
+            const guess = botPossibleWords[Math.floor(Math.random() * botPossibleWords.length)];
+            botCurrentGuess = guess;
+
+            // Update bot's grid display with current guess
+            updateGridDisplay(botGrid, botCurrentGuess, botCurrentRow);
+
+            // Simulate typing delay for better UX
+            let charIndex = 0;
+            const typeInterval = setInterval(() => {
+                if (charIndex < WORD_LENGTH) {
+                    charIndex++;
+                } else {
+                    clearInterval(typeInterval);
+                    checkBotGuess();
+                }
+            }, 150); // Simulate typing speed
+        }
+
+        // Check the bot's guess
+        function checkBotGuess() {
+            const guess = botCurrentGuess;
+            const result = getGuessResult(guess, botTargetWord);
+            // Pass null for keyboardElement for bot as it doesn't have one
+            applyGuessResult(botGrid, null, guess, botCurrentRow, result);
+
+            if (guess === botTargetWord) {
+                botGameOver = true;
+                botWon = true;
+                showGameResult("Bot Wins!", `The bot guessed the word: ${botTargetWord}`);
+            } else if (botCurrentRow === MAX_GUESSES - 1) {
+                botGameOver = true;
+                // If bot loses, check if player has also finished to show combined result
+                if (playerGameOver) {
+                    showFinalGameResult();
+                }
+            } else {
+                botCurrentRow++;
+                botCurrentGuess = "";
+            }
+        }
+
+        // Determine and show the final game result in the modal (only if no one won outright)
+        function showFinalGameResult() {
+            let title = "Game Over!";
+            let message = "";
+
+            if (playerWon && botWon) {
+                // This case should ideally be caught by individual wins, but as a fallback
+                if (playerCurrentRow < botCurrentRow) {
+                    message = `It's a tie! Both of you guessed the word in ${playerCurrentRow + 1} guesses.`;
+                } else if (botCurrentRow < playerCurrentRow) {
+                    message = `It's a tie! Both of you guessed the word in ${botCurrentRow + 1} guesses.`;
+                } else {
+                    message = `It's a tie! Both of you guessed the word in ${playerCurrentRow + 1} guesses.`;
+                }
+            } else if (playerWon) {
+                title = "You Win!";
+                message = `You guessed the word: ${playerTargetWord}! The bot ran out of guesses.`;
+            } else if (botWon) {
+                title = "Bot Wins!";
+                message = `The bot guessed the word: ${botTargetWord}! You ran out of guesses.`;
+            } else {
+                // Neither won (both ran out of guesses)
+                title = "No Winner!";
+                message = `Neither of you guessed the word. Your word was: ${playerTargetWord}, Bot's word was: ${botTargetWord}.`;
+            }
+            showGameResult(title, message);
+        }
+
+        // Show the game result modal
+        function showGameResult(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            gameModal.classList.remove("hidden");
+        }
+
+        // Event listener for play again button
+        playAgainButton.addEventListener("click", initializeGame);
+
+        // How to Play modal functionality
+        howToPlayButton.addEventListener('click', () => {
+            howToPlayModal.classList.remove('hidden');
+        });
+
+        closeHowToPlayButton.addEventListener('click', () => {
+            howToPlayModal.classList.add('hidden');
+        });
+
+        // Initialize game when the page loads (no theme setting needed now)
+        window.onload = () => {
+            initializeGame();
+        };
+    </script>
+</body>
+</html>
